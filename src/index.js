@@ -1,11 +1,10 @@
+import './env.js';
 import express from 'express';
-import dotenv from 'dotenv';
 import ouraRouter from './routes/oura.js';
+import mtgSetsRouter from './routes/mtg_sets.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import serveStatic from 'serve-static';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -13,11 +12,17 @@ const __dirname = dirname(__filename);
 const app = express();
 app.use(express.json());
 
-// API routes first
+// API routes
 app.use('/oura', ouraRouter);
+app.use('/mtg-sets', mtgSetsRouter);
 
-// React app catches everything else
+// Static files
 app.use(serveStatic(join(__dirname, '../client/dist')));
+
+// Catch-all for React Router
+app.get('/{*path}', (req, res) => {
+  res.sendFile(join(__dirname, '../client/dist/index.html'));
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
