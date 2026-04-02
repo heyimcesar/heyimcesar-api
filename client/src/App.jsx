@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom';
 import MTGSets from './pages/MTGSets';
+import MTGSetCards from './pages/MTGSetCards.jsx';
 
 export default function App() {
   return (
@@ -10,7 +11,8 @@ export default function App() {
           <p className="text-zinc-400 text-lg">Under construction 🚧</p>
         </div>
       } />
-      <Route path="/projects/mtg" element={<MTGSets />} />
+      <Route path="/project/mtg" element={<MTGSets />} />
+      <Route path="/project/mtg/:setId" element={<MTGSetCards />} />
     </Routes>
   );
 }

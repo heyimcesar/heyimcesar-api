@@ -25,3 +25,8 @@ export function streamMissingCards(setId, onCard, onDone) {
 
   return source;
 }
+
+export async function getSetInfo(setId) {
+  const res = await fetch(`/mtg-sets/set-info/${setId}`);
+  return res.json();
+}

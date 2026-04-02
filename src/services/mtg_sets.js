@@ -59,3 +59,8 @@ export async function getCardFromScryfall(set, number) {
   const data = await res.json();
   return data;
 }
+
+export async function getSetInfo(setId) {
+  const res = await fetch(`https://api.scryfall.com/sets/${setId.toLowerCase()}`);
+  return res.json();
+}

@@ -3,8 +3,11 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-  ],
+  plugins: [react(), tailwindcss()],
+  server: {
+    proxy: {
+      '/oura': 'http://localhost:3000',
+      '/mtg-sets': 'http://localhost:3000',
+    }
+  }
 })

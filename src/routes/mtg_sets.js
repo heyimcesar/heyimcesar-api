@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getMissingMTGSets, getMTGSetsList } from '../services/mtg_sets.js';
+import { getMissingMTGSets, getMTGSetsList, getSetInfo } from '../services/mtg_sets.js';
 
 const router = Router();
 
@@ -21,6 +21,12 @@ router.get('/missing/:set', async (req, res) => {
 
   res.write('event: done\ndata: done\n\n');
   res.end();
+});
+
+router.get('/set-info/:setId', async (req, res) => {
+  const { setId } = req.params;
+  const data = await getSetInfo(setId);
+  res.json(data);
 });
 
 export default router;
