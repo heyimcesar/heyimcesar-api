@@ -34,24 +34,24 @@ export async function getMTGSetsList() {
   });
 }
 
-export async function getMissingMTGSets(set) {
+export async function getMissingMTGSets(set, onCard) {
   const data = await getMTGSetsSheetData(set);
   const missingCards = data.slice(1).filter(card => !card.B).map(card => card.A);
 
-  const cards = [];
   for (const number of missingCards) {
     const scryfallCard = await getCardFromScryfall(set, number);
-    cards.push({
+    const card = {
       id: number,
       tcgplayer_id: scryfallCard.tcgplayer_id,
       name: scryfallCard.name,
-      price: scryfallCard?.prices?.usd ?? null,
-      price_foil: scryfallCard?.prices?.usd_foil ?? null
-    });
+      price: scryfallCard.prices.usd,
+      price_foil: scryfallCard.prices.usd_foil,
+      image_uri: scryfallCard.card_faces ? scryfallCard.card_faces[0].image_uris?.normal : scryfallCard.image_uris?.normal,
+      back_image_uri: scryfallCard.card_faces ? scryfallCard.card_faces[1].image_uris?.normal : null
+    };
+    onCard(card);
     await delay(100);
   }
-
-  return cards;
 }
 
 export async function getCardFromScryfall(set, number) {

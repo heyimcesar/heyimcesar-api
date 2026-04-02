@@ -10,7 +10,7 @@ export default function App() {
           <p className="text-zinc-400 text-lg">Under construction 🚧</p>
         </div>
       } />
-      <Route path="/mtg" element={<MTGSets />} />
+      <Route path="/projects/mtg" element={<MTGSets />} />
     </Routes>
   );
 }
