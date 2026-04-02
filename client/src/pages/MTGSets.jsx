@@ -67,7 +67,7 @@ export default function MTGSets() {
                 {missingCards.map(card => (
                   <tr key={card.id} className="border-b border-zinc-800 hover:bg-zinc-900">
                     <td className="py-2 pr-4 text-zinc-400">{card.id}</td>
-                    <td className="py-2 pr-4">{card.name}</td>
+                    <td className="py-2 pr-4"><a href={`https://www.tcgplayer.com/product/${card.tcgplayer_id}`} target="_blank" rel="noopener noreferrer">{card.name}</a></td>
                     <td className="py-2 pr-4">${card.price ?? '—'}</td>
                     <td className="py-2">${card.price_foil ?? '—'}</td>
                   </tr>

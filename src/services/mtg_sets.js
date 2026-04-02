@@ -41,7 +41,6 @@ export async function getMissingMTGSets(set) {
   const cards = [];
   for (const number of missingCards) {
     const scryfallCard = await getCardFromScryfall(set, number);
-    console.log(scryfallCard?.prices);
     cards.push({
       id: number,
       tcgplayer_id: scryfallCard.tcgplayer_id,
