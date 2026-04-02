@@ -89,6 +89,7 @@ export default function MTGSetCards() {
   const [loadingIds, setLoadingIds] = useState(true);
   const [loadingCards, setLoadingCards] = useState(false);
   const [setInfo, setSetInfo] = useState(null);
+  const [search, setSearch] = useState('');
   const abortRef = useRef(false);
 
   useEffect(() => {
@@ -101,6 +102,7 @@ export default function MTGSetCards() {
     setCards({});
     setLoadingIds(true);
     setLoadingCards(false);
+    setSearch('');
 
     getMissingCardIds(setId).then(async (ids) => {
       setCardIds(ids);
@@ -126,6 +128,16 @@ export default function MTGSetCards() {
   const completionPct = setInfo && !loadingIds
     ? Math.round(((setInfo.card_count - cardIds.length) / setInfo.card_count) * 100)
     : null;
+
+  const filteredIds = search.trim() === ''
+    ? cardIds
+    : cardIds.filter(id => {
+        const card = cards[id];
+        const query = search.toLowerCase();
+        if (String(id).includes(query)) return true;
+        if (card?.name?.toLowerCase().includes(query)) return true;
+        return false;
+      });
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -210,8 +222,34 @@ export default function MTGSetCards() {
           </p>
         )}
 
+        {/* Search */}
+        {!loadingIds && (
+          <div className="flex items-center gap-4 mb-6">
+            <input
+              type="text"
+              placeholder="Search by name or number..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="bg-zinc-800 text-white border border-zinc-600 rounded px-4 py-2 w-72 text-sm"
+            />
+            {search && (
+              <span className="text-zinc-400 text-sm">
+                {filteredIds.length} result{filteredIds.length !== 1 ? 's' : ''}
+              </span>
+            )}
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="text-zinc-500 hover:text-white text-sm transition"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {cardIds.map(id => (
+          {filteredIds.map(id => (
             <CardTile key={id} id={id} card={cards[id]} />
           ))}
         </div>
