@@ -1,37 +1,130 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { streamMissingCards, getSetInfo } from '../api/mtgSets';
+import { getMissingCardIds, getCard, getSetInfo } from '../api/mtgSets';
+
+const CONCURRENCY = 1;
+
+async function fetchWithConcurrency(ids, fetchFn, onResult) {
+  let index = 0;
+
+  async function worker() {
+    while (index < ids.length) {
+      const current = index++;
+      const result = await fetchFn(ids[current]);
+      onResult(result, ids[current]);
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+  }
+
+  const workers = Array.from({ length: CONCURRENCY }, () => worker());
+  await Promise.all(workers);
+}
+
+function CardTile({ id, card }) {
+  const [flipped, setFlipped] = useState(false);
+  const canFlip = card?.back_image_uri;
+  const currentImage = flipped ? card?.back_image_uri : card?.image_uri;
+
+  if (card === null) {
+    return (
+      <div className="bg-zinc-900 rounded-lg overflow-hidden">
+        <div className="w-full aspect-[2.5/3.5] bg-zinc-800 flex items-center justify-center text-red-600 text-xs p-2 text-center">
+          Failed to load
+        </div>
+        <div className="p-2">
+          <p className="text-xs text-zinc-500">#{id}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-zinc-900 rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition">
+      {currentImage ? (
+        <div className="relative">
+          <img src={currentImage} alt={card?.name} className="w-full" />
+          {canFlip && (
+            <button
+              onClick={() => setFlipped(prev => !prev)}
+              className="absolute bottom-2 right-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg transition"
+            >
+              Flip
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="w-full aspect-[2.5/3.5] bg-zinc-800 flex items-center justify-center text-zinc-600 text-xs p-2 text-center">
+          {card === undefined ? '...' : 'No image'}
+        </div>
+      )}
+      <div className="p-2">
+        <p className="text-xs text-zinc-500">#{id}</p>
+        {card !== undefined ? (
+          <>
+            <p className="text-xs font-medium truncate mb-1">{card.name}</p>
+            <p className="text-xs text-zinc-400">Normal: ${card.price ?? '—'}</p>
+            <p className="text-xs text-yellow-500">Foil: ${card.price_foil ?? '—'}</p>
+            <a
+              href={`https://www.tcgplayer.com/product/${card.tcgplayer_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-400 hover:text-blue-300 mt-1 block"
+            >
+              Buy on TCGPlayer &rarr;
+            </a>
+          </>
+        ) : (
+          <p className="text-xs text-zinc-600">Loading...</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function MTGSetCards() {
   const { setId } = useParams();
   const navigate = useNavigate();
-  const [missingCards, setMissingCards] = useState([]);
-  const [loadingCards, setLoadingCards] = useState(true);
+  const [cardIds, setCardIds] = useState([]);
+  const [cards, setCards] = useState({});
+  const [loadingIds, setLoadingIds] = useState(true);
+  const [loadingCards, setLoadingCards] = useState(false);
   const [setInfo, setSetInfo] = useState(null);
-  const sourceRef = useRef(null);
+  const abortRef = useRef(false);
 
   useEffect(() => {
     getSetInfo(setId).then(data => setSetInfo(data));
   }, [setId]);
 
   useEffect(() => {
-    if (sourceRef.current) sourceRef.current.close();
-    setMissingCards([]);
-    setLoadingCards(true);
+    abortRef.current = false;
+    setCardIds([]);
+    setCards({});
+    setLoadingIds(true);
+    setLoadingCards(false);
 
-    sourceRef.current = streamMissingCards(
-      setId,
-      (card) => setMissingCards(prev => [...prev, card]),
-      () => setLoadingCards(false)
-    );
+    getMissingCardIds(setId).then(async (ids) => {
+      setCardIds(ids);
+      setLoadingIds(false);
+      setLoadingCards(true);
 
-    return () => {
-      if (sourceRef.current) sourceRef.current.close();
-    };
+      await fetchWithConcurrency(
+        ids,
+        (id) => getCard(setId, id),
+        (card, id) => {
+          if (abortRef.current) return;
+          setCards(prev => ({ ...prev, [id]: card }));
+        }
+      );
+
+      setLoadingCards(false);
+    });
+
+    return () => { abortRef.current = true; };
   }, [setId]);
 
-  const completionPct = setInfo
-    ? Math.round(((setInfo.card_count - missingCards.length) / setInfo.card_count) * 100)
+  const loadedCount = Object.keys(cards).length;
+  const completionPct = setInfo && !loadingIds
+    ? Math.round(((setInfo.card_count - cardIds.length) / setInfo.card_count) * 100)
     : null;
 
   return (
@@ -81,19 +174,19 @@ export default function MTGSetCards() {
             <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
               <p className="text-zinc-500 text-xs uppercase tracking-wide mb-1">Missing</p>
               <p className="text-2xl font-bold text-red-400">
-                {loadingCards ? '...' : missingCards.length}
+                {loadingIds ? '...' : cardIds.length}
               </p>
             </div>
             <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
               <p className="text-zinc-500 text-xs uppercase tracking-wide mb-1">Completion</p>
               <p className="text-2xl font-bold text-green-400">
-                {loadingCards ? '...' : `${completionPct}%`}
+                {completionPct !== null ? `${completionPct}%` : '...'}
               </p>
             </div>
           </div>
 
           {/* Progress bar */}
-          {!loadingCards && completionPct !== null && (
+          {completionPct !== null && (
             <div className="mt-4">
               <div className="w-full bg-zinc-800 rounded-full h-2">
                 <div
@@ -108,41 +201,18 @@ export default function MTGSetCards() {
 
       {/* Cards Grid */}
       <div className="px-8 py-8 max-w-screen-xl mx-auto">
-        {loadingCards && missingCards.length === 0 && (
-          <p className="text-zinc-400 text-sm mb-4">Loading cards...</p>
+        {loadingIds && (
+          <p className="text-zinc-400 text-sm mb-4">Loading card list...</p>
         )}
-        {loadingCards && missingCards.length > 0 && (
-          <p className="text-zinc-400 text-sm mb-4">Loading... {missingCards.length} cards so far</p>
+        {!loadingIds && loadingCards && (
+          <p className="text-zinc-400 text-sm mb-4">
+            Loading card details... {loadedCount} / {cardIds.length}
+          </p>
         )}
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          {missingCards.map(card => (
-            <div
-              key={card.id}
-              className="bg-zinc-900 rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition"
-            >
-              {card.image_uri ? (
-                <img src={card.image_uri} alt={card.name} className="w-full" />
-              ) : (
-                <div className="w-full aspect-[2.5/3.5] bg-zinc-800 flex items-center justify-center text-zinc-600 text-xs p-2 text-center">
-                  No image
-                </div>
-              )}
-              <div className="p-2">
-                <p className="text-xs text-zinc-500">#{card.id}</p>
-                <p className="text-xs font-medium truncate mb-1">{card.name}</p>
-                <p className="text-xs text-zinc-400">Normal: ${card.price ?? '—'}</p>
-                <p className="text-xs text-yellow-500">Foil: ${card.price_foil ?? '—'}</p>
-                <a
-                  href={`https://www.tcgplayer.com/product/${card.tcgplayer_id}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-blue-400 hover:text-blue-300 mt-1 block"
-                >
-                  Buy on TCGPlayer →
-                </a>
-              </div>
-            </div>
+          {cardIds.map(id => (
+            <CardTile key={id} id={id} card={cards[id]} />
           ))}
         </div>
       </div>

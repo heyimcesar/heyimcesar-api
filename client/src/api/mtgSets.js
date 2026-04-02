@@ -5,28 +5,25 @@ export async function getMySets() {
   return res.json();
 }
 
-export function streamMissingCards(setId, onCard, onDone) {
-  const source = new EventSource(`${BASE_URL}/missing/${setId}`);
+export async function getMissingCardIds(setId) {
+  const res = await fetch(`${BASE_URL}/missing-ids/${setId}`);
+  return res.json();
+}
 
-  source.onmessage = (e) => {
-    const card = JSON.parse(e.data);
-    onCard(card);
-  };
-
-  source.addEventListener('done', () => {
-    source.close();
-    onDone();
-  });
-
-  source.onerror = () => {
-    source.close();
-    onDone();
-  };
-
-  return source;
+export async function getCard(setId, number, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    const res = await fetch(`${BASE_URL}/card/${setId}/${number}`);
+    if (res.status === 429) {
+      await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+      continue;
+    }
+    if (!res.ok) return null;
+    return res.json();
+  }
+  return null;
 }
 
 export async function getSetInfo(setId) {
-  const res = await fetch(`/mtg-sets/set-info/${setId}`);
+  const res = await fetch(`${BASE_URL}/set-info/${setId}`);
   return res.json();
 }
