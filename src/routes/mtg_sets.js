@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getMTGSetsList,
   getMissingCardIds,
+  getOwnedCardIds,
   getCardFromScryfall,
   getSetInfo
 } from '../services/mtg_sets.js';
@@ -18,6 +19,12 @@ router.get('/my-sets', async (req, res) => {
 router.get('/missing-ids/:set', async (req, res) => {
   const { set } = req.params;
   const ids = await getMissingCardIds(set);
+  res.json(ids);
+});
+
+router.get('/owned-ids/:set', async (req, res) => {
+  const { set } = req.params;
+  const ids = await getOwnedCardIds(set);
   res.json(ids);
 });
 

@@ -33,6 +33,16 @@ export async function getMissingCardIds(set) {
   return data.slice(1).filter(card => !card.B).map(card => card.A);
 }
 
+export async function getOwnedCardIds(set) {
+  const data = await getMTGSetsSheetData(set);
+  return data.slice(1)
+    .filter(card => card.B)
+    .map(card => ({
+      id: card.A,
+      foil: !!card.C
+    }));
+}
+
 export async function getCardFromScryfall(set, number) {
   const res = await fetch(`https://api.scryfall.com/cards/${set}/${number}`);
   const data = await res.json();

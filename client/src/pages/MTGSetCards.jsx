@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getMissingCardIds, getCard, getSetInfo } from '../api/mtgSets';
+import { getMissingCardIds, getOwnedCardIds, getCard, getSetInfo } from '../api/mtgSets';
 
 const CONCURRENCY = 1;
 
@@ -20,7 +20,7 @@ async function fetchWithConcurrency(ids, fetchFn, onResult) {
   await Promise.all(workers);
 }
 
-function CardTile({ id, card }) {
+function CardTile({ id, card, foil }) {
   const [flipped, setFlipped] = useState(false);
   const canFlip = card?.back_image_uri;
   const currentImage = flipped ? card?.back_image_uri : card?.image_uri;
@@ -39,7 +39,12 @@ function CardTile({ id, card }) {
   }
 
   return (
-    <div className="bg-zinc-900 rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition">
+    <div className="bg-zinc-900 rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition relative">
+      {foil && (
+        <div className="absolute top-2 left-2 z-10 bg-yellow-500 text-black text-xs font-bold px-2 py-0.5 rounded-full shadow">
+          Foil
+        </div>
+      )}
       {currentImage ? (
         <div className="relative">
           <img src={currentImage} alt={card?.name} className="w-full" />
@@ -84,55 +89,104 @@ function CardTile({ id, card }) {
 export default function MTGSetCards() {
   const { setId } = useParams();
   const navigate = useNavigate();
-  const [cardIds, setCardIds] = useState([]);
-  const [cards, setCards] = useState({});
-  const [loadingIds, setLoadingIds] = useState(true);
-  const [loadingCards, setLoadingCards] = useState(false);
+
+  const [view, setView] = useState('missing'); // 'missing' | 'owned'
+
+  // Missing
+  const [missingIds, setMissingIds] = useState([]);
+  const [missingCards, setMissingCards] = useState({});
+  const [loadingMissingIds, setLoadingMissingIds] = useState(true);
+  const [loadingMissingCards, setLoadingMissingCards] = useState(false);
+
+  // Owned
+  const [ownedIds, setOwnedIds] = useState([]); // [{id, foil}]
+  const [ownedCards, setOwnedCards] = useState({});
+  const [loadingOwnedIds, setLoadingOwnedIds] = useState(true);
+  const [loadingOwnedCards, setLoadingOwnedCards] = useState(false);
+
   const [setInfo, setSetInfo] = useState(null);
   const [search, setSearch] = useState('');
-  const abortRef = useRef(false);
+  const missingAbortRef = useRef(false);
+  const ownedAbortRef = useRef(false);
 
   useEffect(() => {
     getSetInfo(setId).then(data => setSetInfo(data));
   }, [setId]);
 
+  // Fetch missing cards
   useEffect(() => {
-    abortRef.current = false;
-    setCardIds([]);
-    setCards({});
-    setLoadingIds(true);
-    setLoadingCards(false);
-    setSearch('');
+    missingAbortRef.current = false;
+    ownedAbortRef.current = false;
+    setMissingIds([]);
+    setMissingCards({});
+    setOwnedIds([]);
+    setOwnedCards({});
+    setLoadingMissingIds(true);
+    setLoadingOwnedIds(true);
+    setLoadingMissingCards(false);
+    setLoadingOwnedCards(false);
 
-    getMissingCardIds(setId).then(async (ids) => {
-      setCardIds(ids);
-      setLoadingIds(false);
-      setLoadingCards(true);
+    async function fetchAll() {
+      // Fetch both ID lists in parallel (these are fast, just Google Sheets)
+      const [missingIdsResult, ownedIdsResult] = await Promise.all([
+        getMissingCardIds(setId),
+        getOwnedCardIds(setId)
+      ]);
 
+      setMissingIds(missingIdsResult);
+      setOwnedIds(ownedIdsResult);
+      setLoadingMissingIds(false);
+      setLoadingOwnedIds(false);
+
+      // Fetch missing cards first
+      setLoadingMissingCards(true);
       await fetchWithConcurrency(
-        ids,
+        missingIdsResult,
         (id) => getCard(setId, id),
         (card, id) => {
-          if (abortRef.current) return;
-          setCards(prev => ({ ...prev, [id]: card }));
+          if (missingAbortRef.current) return;
+          setMissingCards(prev => ({ ...prev, [id]: card }));
         }
       );
+      setLoadingMissingCards(false);
 
-      setLoadingCards(false);
-    });
+      // Then fetch owned cards
+      if (ownedAbortRef.current) return;
+      setLoadingOwnedCards(true);
+      await fetchWithConcurrency(
+        ownedIdsResult.map(i => i.id),
+        (id) => getCard(setId, id),
+        (card, id) => {
+          if (ownedAbortRef.current) return;
+          setOwnedCards(prev => ({ ...prev, [id]: card }));
+        }
+      );
+      setLoadingOwnedCards(false);
+    }
 
-    return () => { abortRef.current = true; };
+    fetchAll();
+
+    return () => {
+      missingAbortRef.current = true;
+      ownedAbortRef.current = true;
+    };
   }, [setId]);
 
-  const loadedCount = Object.keys(cards).length;
-  const completionPct = setInfo && !loadingIds
-    ? Math.round(((setInfo.card_count - cardIds.length) / setInfo.card_count) * 100)
+  const isMissing = view === 'missing';
+  const activeIds = isMissing ? missingIds : ownedIds.map(i => i.id);
+  const activeCards = isMissing ? missingCards : ownedCards;
+  const loadingIds = isMissing ? loadingMissingIds : loadingOwnedIds;
+  const loadingCards = isMissing ? loadingMissingCards : loadingOwnedCards;
+  const loadedCount = Object.keys(activeCards).length;
+
+  const completionPct = setInfo && !loadingMissingIds
+    ? Math.round(((setInfo.card_count - missingIds.length) / setInfo.card_count) * 100)
     : null;
 
   const filteredIds = search.trim() === ''
-    ? cardIds
-    : cardIds.filter(id => {
-        const card = cards[id];
+    ? activeIds
+    : activeIds.filter(id => {
+        const card = activeCards[id];
         const query = search.toLowerCase();
         if (String(id).includes(query)) return true;
         if (card?.name?.toLowerCase().includes(query)) return true;
@@ -186,7 +240,7 @@ export default function MTGSetCards() {
             <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
               <p className="text-zinc-500 text-xs uppercase tracking-wide mb-1">Missing</p>
               <p className="text-2xl font-bold text-red-400">
-                {loadingIds ? '...' : cardIds.length}
+                {loadingMissingIds ? '...' : missingIds.length}
               </p>
             </div>
             <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
@@ -213,12 +267,39 @@ export default function MTGSetCards() {
 
       {/* Cards Grid */}
       <div className="px-8 py-8 max-w-screen-xl mx-auto">
+
+        {/* Toggle */}
+        <div className="flex items-center gap-2 mb-6">
+          <div className="flex bg-zinc-800 rounded-lg p-1">
+            <button
+              onClick={() => { setView('missing'); setSearch(''); }}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                view === 'missing'
+                  ? 'bg-red-600 text-white'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Missing {!loadingMissingIds && `(${missingIds.length})`}
+            </button>
+            <button
+              onClick={() => { setView('owned'); setSearch(''); }}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition ${
+                view === 'owned'
+                  ? 'bg-green-600 text-white'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Have {!loadingOwnedIds && `(${ownedIds.length})`}
+            </button>
+          </div>
+        </div>
+
         {loadingIds && (
           <p className="text-zinc-400 text-sm mb-4">Loading card list...</p>
         )}
         {!loadingIds && loadingCards && (
           <p className="text-zinc-400 text-sm mb-4">
-            Loading card details... {loadedCount} / {cardIds.length}
+            Loading card details... {loadedCount} / {activeIds.length}
           </p>
         )}
 
@@ -250,7 +331,12 @@ export default function MTGSetCards() {
 
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
           {filteredIds.map(id => (
-            <CardTile key={id} id={id} card={cards[id]} />
+            <CardTile
+              key={id}
+              id={id}
+              card={activeCards[id]}
+              foil={!isMissing && ownedIds.find(i => i.id === id)?.foil}
+            />
           ))}
         </div>
       </div>
