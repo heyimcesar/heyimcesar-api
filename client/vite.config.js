@@ -8,6 +8,7 @@ export default defineConfig({
     proxy: {
       '/oura': 'http://localhost:3000',
       '/mtg-sets': 'http://localhost:3000',
+      '/spotify': 'http://localhost:3000',
     }
   }
 })
