@@ -128,6 +128,151 @@ function NowPlaying() {
   );
 }
 
+// ─── Profile Tab ─────────────────────────────────────────────────────────────
+
+function ProfileTab() {
+  const [profile, setProfile] = useState(null);
+  const [topArtists, setTopArtists] = useState([]);
+  const [topTracks, setTopTracks] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetchSpotify('/spotify/profile'),
+      fetchSpotify('/spotify/top-artists?time_range=short_term&limit=5'),
+      fetchSpotify('/spotify/top-tracks?time_range=short_term&limit=5'),
+    ]).then(([prof, artists, tracks]) => {
+      setProfile(prof);
+      setTopArtists(artists);
+      setTopTracks(tracks);
+    }).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="space-y-4">
+      <div className="h-32 bg-zinc-900 border border-zinc-800 rounded-2xl animate-pulse" />
+      <div className="h-48 bg-zinc-900 border border-zinc-800 rounded-2xl animate-pulse" />
+    </div>
+  );
+
+  // Derive top genres from top artists
+  const genreCounts = {};
+  topArtists.forEach(a => a.genres.forEach(g => {
+    genreCounts[g] = (genreCounts[g] || 0) + 1;
+  }));
+  const topGenres = Object.entries(genreCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([g]) => g);
+
+  return (
+    <div className="space-y-6">
+
+      {/* Profile Card */}
+      <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-6 flex items-center gap-6">
+        {profile.image ? (
+          <img
+            src={profile.image}
+            alt={profile.display_name}
+            className="w-20 h-20 rounded-full object-cover flex-shrink-0 ring-2 ring-zinc-800"
+          />
+        ) : (
+          <div className="w-20 h-20 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0">
+            <span className="text-2xl text-zinc-600">
+              {profile.display_name?.[0] ?? '?'}
+            </span>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-1">Spotify Profile</p>
+          <h2 className="text-2xl font-bold text-white truncate">{profile.display_name}</h2>
+          <p className="text-zinc-500 text-sm mt-1">@{profile.id}</p>
+          <div className="flex items-center gap-4 mt-3">
+            <div className="text-center">
+              <p className="text-white font-semibold">{profile.followers.toLocaleString()}</p>
+              <p className="text-zinc-600 text-xs">Followers</p>
+            </div>
+            <div className="w-px h-8 bg-zinc-800" />
+            <a
+              href={profile.external_url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 text-green-400 hover:text-green-300 text-sm transition"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+              </svg>
+              Open on Spotify
+            </a>
+          </div>
+        </div>
+      </div>
+
+      {/* Now Playing */}
+      <NowPlaying />
+
+      {/* Top Genres */}
+      {topGenres.length > 0 && (
+        <div>
+          <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-3">Top Genres · 4 Weeks</p>
+          <div className="flex flex-wrap gap-2">
+            {topGenres.map((genre, i) => (
+              <span
+                key={genre}
+                className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                  i === 0
+                    ? 'bg-green-400/10 border-green-400/30 text-green-400'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-400'
+                }`}
+              >
+                {genre}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Top Tracks & Artists side by side */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-3">Top Tracks · 4 Weeks</p>
+          <div className="space-y-1">
+            {topTracks.map((track, i) => (
+              <a key={track.id} href={track.external_url} target="_blank" rel="noreferrer"
+                className="flex items-center gap-3 p-2 rounded-xl hover:bg-zinc-900 transition group">
+                <span className="text-zinc-700 font-mono text-xs w-4 text-right">{i + 1}</span>
+                <img src={track.album_image} alt={track.album} className="w-8 h-8 rounded-md object-cover flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm truncate group-hover:text-green-400 transition">{track.name}</p>
+                  <p className="text-zinc-600 text-xs truncate">{track.artist}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-3">Top Artists · 4 Weeks</p>
+          <div className="space-y-1">
+            {topArtists.map((artist, i) => (
+              <a key={artist.id} href={artist.external_url} target="_blank" rel="noreferrer"
+                className="flex items-center gap-3 p-2 rounded-xl hover:bg-zinc-900 transition group">
+                <span className="text-zinc-700 font-mono text-xs w-4 text-right">{i + 1}</span>
+                <img src={artist.image} alt={artist.name} className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm truncate group-hover:text-green-400 transition">{artist.name}</p>
+                  <p className="text-zinc-600 text-xs truncate">{artist.genres[0] || '—'}</p>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
 // ─── Overview Tab ─────────────────────────────────────────────────────────────
 
 function OverviewTab() {
@@ -449,6 +594,7 @@ function RecentHistoryTab() {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 const TABS = [
+  { key: 'profile',      label: 'Profile' },
   { key: 'overview',     label: 'Overview' },
   { key: 'top-tracks',   label: 'Top Tracks' },
   { key: 'top-artists',  label: 'Top Artists' },
@@ -456,7 +602,7 @@ const TABS = [
 ];
 
 export default function Spotify() {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('profile');
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -489,6 +635,7 @@ export default function Spotify() {
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-8">
+        {activeTab === 'profile'     && <ProfileTab />}
         {activeTab === 'overview'    && <OverviewTab />}
         {activeTab === 'top-tracks'  && <TopTracksTab />}
         {activeTab === 'top-artists' && <TopArtistsTab />}

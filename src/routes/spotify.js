@@ -193,4 +193,20 @@ router.get('/now-playing', async (req, res) => {
   }
 });
 
+router.get('/profile', async (req, res) => {
+  try {
+    const data = await spotifyFetch('/users/12133942215');
+    res.json({
+      id: data.id,
+      display_name: data.display_name,
+      followers: data.followers?.total,
+      image: data.images?.[0]?.url,
+      external_url: data.external_urls?.spotify,
+    });
+  } catch (err) {
+    console.error('Error fetching profile:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
