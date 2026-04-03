@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import MTGSets from './pages/MTGSets';
 import MTGSetCards from './pages/MTGSetCards';
+import Spotify from './pages/Spotify';
 import NotFound from './pages/NotFound';
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
       } />
       <Route path="/project/mtg" element={<MTGSets />} />
       <Route path="/project/mtg/:setId" element={<MTGSetCards />} />
+      <Route path="/project/spotify" element={<Spotify />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
