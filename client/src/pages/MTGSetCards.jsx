@@ -31,8 +31,87 @@ function formatDate(dateStr) {
   });
 }
 
+function CardModal({ card, foil, onClose }) {
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-zinc-900 rounded-xl max-w-2xl w-full p-6 relative"
+        onClick={e => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-zinc-400 hover:text-white text-sm transition"
+        >
+          ✕ Close
+        </button>
+
+        <div className="flex gap-4 justify-center mb-4">
+          {card.image_uri && (
+            <img
+              src={card.image_uri}
+              alt={card.name}
+              className="rounded-lg w-64"
+            />
+          )}
+          {card.back_image_uri && (
+            <img
+              src={card.back_image_uri}
+              alt={`${card.name} (back)`}
+              className="rounded-lg w-64"
+            />
+          )}
+        </div>
+
+        <div className="text-center">
+          {foil && (
+            <span className="bg-yellow-500 text-black text-xs font-bold px-2 py-0.5 rounded-full mr-2">
+              Foil
+            </span>
+          )}
+          <h2 className="text-xl font-bold mb-1">{card.name}</h2>
+          <p className="text-zinc-500 text-sm mb-3">#{card.id}</p>
+          <div className="flex justify-center gap-6 text-sm mb-4">
+            <div>
+              <p className="text-zinc-500 text-xs">Normal</p>
+              <p className="text-zinc-300">${card.price ?? '—'}</p>
+            </div>
+            <div>
+              <p className="text-zinc-500 text-xs">Foil</p>
+              <p className="text-yellow-500">${card.price_foil ?? '—'}</p>
+            </div>
+          </div>
+          <a
+            href={`https://www.tcgplayer.com/product/${card.tcgplayer_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block bg-blue-600 hover:bg-blue-500 text-white text-sm px-4 py-2 rounded-lg transition"
+          >
+            Buy on TCGPlayer &rarr;
+          </a>
+          <div className="mt-4 text-xs text-zinc-600">
+            {card.source === 'db' ? '🗄 DB' : '🌐 Scryfall'}
+            {card.updated_at && <span className="ml-1">{formatDate(card.updated_at)}</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CardTile({ id, card, foil }) {
   const [flipped, setFlipped] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const canFlip = card?.back_image_uri;
   const currentImage = flipped ? card?.back_image_uri : card?.image_uri;
 
@@ -64,58 +143,68 @@ function CardTile({ id, card, foil }) {
   }
 
   return (
-    <div className="bg-zinc-900 rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition relative">
-      {foil && (
-        <div className="absolute top-2 left-2 z-10 bg-yellow-500 text-black text-xs font-bold px-2 py-0.5 rounded-full shadow">
-          Foil
-        </div>
+    <>
+      {expanded && card && (
+        <CardModal card={card} foil={foil} onClose={() => setExpanded(false)} />
       )}
-      {currentImage ? (
-        <div className="relative">
-          <img src={currentImage} alt={card?.name} className="w-full" />
-          {canFlip && (
-            <button
-              onClick={() => setFlipped(prev => !prev)}
-              className="absolute bottom-2 right-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg transition"
-            >
-              Flip
-            </button>
+      <div className="bg-zinc-900 rounded-lg overflow-hidden hover:ring-2 hover:ring-indigo-500 transition relative">
+        {foil && (
+          <div className="absolute top-2 left-2 z-10 bg-yellow-500 text-black text-xs font-bold px-2 py-0.5 rounded-full shadow">
+            Foil
+          </div>
+        )}
+        {currentImage ? (
+          <div className="relative">
+            <img
+              src={currentImage}
+              alt={card?.name}
+              className="w-full cursor-pointer"
+              onClick={() => card && setExpanded(true)}
+            />
+            {canFlip && (
+              <button
+                onClick={e => { e.stopPropagation(); setFlipped(prev => !prev); }}
+                className="absolute bottom-2 right-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1 rounded-full shadow-lg transition"
+              >
+                Flip
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="w-full aspect-[2.5/3.5] bg-zinc-800 flex items-center justify-center text-zinc-600 text-xs p-2 text-center">
+            {card === undefined ? '...' : 'No image'}
+          </div>
+        )}
+        <div className="p-2">
+          <p className="text-xs text-zinc-500">#{id}</p>
+          {card !== undefined ? (
+            <>
+              <p className="text-xs font-medium truncate mb-1">{card.name}</p>
+              <p className="text-xs text-zinc-400">Normal: ${card.price ?? '—'}</p>
+              <p className="text-xs text-yellow-500">Foil: ${card.price_foil ?? '—'}</p>
+              <a
+                href={`https://www.tcgplayer.com/product/${card.tcgplayer_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-400 hover:text-blue-300 mt-1 block"
+              >
+                Buy on TCGPlayer &rarr;
+              </a>
+              <div className="mt-2 pt-2 border-t border-zinc-800">
+                <p className="text-xs text-zinc-600">
+                  {card.source === 'db' ? '🗄 DB' : '🌐 Scryfall'}
+                  {card.updated_at && (
+                    <span className="ml-1">{formatDate(card.updated_at)}</span>
+                  )}
+                </p>
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-zinc-600">Loading...</p>
           )}
         </div>
-      ) : (
-        <div className="w-full aspect-[2.5/3.5] bg-zinc-800 flex items-center justify-center text-zinc-600 text-xs p-2 text-center">
-          {card === undefined ? '...' : 'No image'}
-        </div>
-      )}
-      <div className="p-2">
-        <p className="text-xs text-zinc-500">#{id}</p>
-        {card !== undefined ? (
-          <>
-            <p className="text-xs font-medium truncate mb-1">{card.name}</p>
-            <p className="text-xs text-zinc-400">Normal: ${card.price ?? '—'}</p>
-            <p className="text-xs text-yellow-500">Foil: ${card.price_foil ?? '—'}</p>
-            <a
-              href={`https://www.tcgplayer.com/product/${card.tcgplayer_id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-blue-400 hover:text-blue-300 mt-1 block"
-            >
-              Buy on TCGPlayer &rarr;
-            </a>
-            <div className="mt-2 pt-2 border-t border-zinc-800">
-              <p className="text-xs text-zinc-600">
-                {card.source === 'db' ? '🗄 DB' : '🌐 Scryfall'}
-                {card.updated_at && (
-                  <span className="ml-1">{formatDate(card.updated_at)}</span>
-                )}
-              </p>
-            </div>
-          </>
-        ) : (
-          <p className="text-xs text-zinc-600">Loading...</p>
-        )}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -157,7 +246,6 @@ export default function MTGSetCards() {
     setLoadingOwnedCards(false);
 
     async function fetchAll() {
-      // Fetch all IDs and all DB cards in parallel
       const [missingIdsResult, ownedIdsResult, allCards] = await Promise.all([
         getMissingCardIds(setId),
         getOwnedCardIds(setId),
