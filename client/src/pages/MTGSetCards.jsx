@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getMissingCardIds, getOwnedCardIds, getCard, getSetInfo } from '../api/mtgSets';
+import { getMissingCardIds, getOwnedCardIds, getCard, getSetInfo, getAllCards } from '../api/mtgSets';
 
 const CONCURRENCY = 1;
 
@@ -20,6 +20,17 @@ async function fetchWithConcurrency(ids, fetchFn, onResult) {
   await Promise.all(workers);
 }
 
+function formatDate(dateStr) {
+  if (!dateStr) return null;
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 function CardTile({ id, card, foil }) {
   const [flipped, setFlipped] = useState(false);
   const canFlip = card?.back_image_uri;
@@ -33,6 +44,20 @@ function CardTile({ id, card, foil }) {
         </div>
         <div className="p-2">
           <p className="text-xs text-zinc-500">#{id}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (card?.not_found) {
+    return (
+      <div className="bg-zinc-900 rounded-lg overflow-hidden opacity-40">
+        <div className="w-full aspect-[2.5/3.5] bg-zinc-800 flex items-center justify-center text-zinc-600 text-xs p-2 text-center">
+          Not in Scryfall
+        </div>
+        <div className="p-2">
+          <p className="text-xs text-zinc-500">#{id}</p>
+          <p className="text-xs text-zinc-600">No match found</p>
         </div>
       </div>
     );
@@ -77,6 +102,14 @@ function CardTile({ id, card, foil }) {
             >
               Buy on TCGPlayer &rarr;
             </a>
+            <div className="mt-2 pt-2 border-t border-zinc-800">
+              <p className="text-xs text-zinc-600">
+                {card.source === 'db' ? '🗄 DB' : '🌐 Scryfall'}
+                {card.updated_at && (
+                  <span className="ml-1">{formatDate(card.updated_at)}</span>
+                )}
+              </p>
+            </div>
           </>
         ) : (
           <p className="text-xs text-zinc-600">Loading...</p>
@@ -90,16 +123,14 @@ export default function MTGSetCards() {
   const { setId } = useParams();
   const navigate = useNavigate();
 
-  const [view, setView] = useState('missing'); // 'missing' | 'owned'
+  const [view, setView] = useState('missing');
 
-  // Missing
   const [missingIds, setMissingIds] = useState([]);
   const [missingCards, setMissingCards] = useState({});
   const [loadingMissingIds, setLoadingMissingIds] = useState(true);
   const [loadingMissingCards, setLoadingMissingCards] = useState(false);
 
-  // Owned
-  const [ownedIds, setOwnedIds] = useState([]); // [{id, foil}]
+  const [ownedIds, setOwnedIds] = useState([]);
   const [ownedCards, setOwnedCards] = useState({});
   const [loadingOwnedIds, setLoadingOwnedIds] = useState(true);
   const [loadingOwnedCards, setLoadingOwnedCards] = useState(false);
@@ -113,7 +144,6 @@ export default function MTGSetCards() {
     getSetInfo(setId).then(data => setSetInfo(data));
   }, [setId]);
 
-  // Fetch missing cards
   useEffect(() => {
     missingAbortRef.current = false;
     ownedAbortRef.current = false;
@@ -127,40 +157,65 @@ export default function MTGSetCards() {
     setLoadingOwnedCards(false);
 
     async function fetchAll() {
-      // Fetch both ID lists in parallel (these are fast, just Google Sheets)
-      const [missingIdsResult, ownedIdsResult] = await Promise.all([
+      // Fetch all IDs and all DB cards in parallel
+      const [missingIdsResult, ownedIdsResult, allCards] = await Promise.all([
         getMissingCardIds(setId),
-        getOwnedCardIds(setId)
+        getOwnedCardIds(setId),
+        getAllCards(setId)
       ]);
 
       setMissingIds(missingIdsResult);
       setOwnedIds(ownedIdsResult);
       setLoadingMissingIds(false);
       setLoadingOwnedIds(false);
-
-      // Fetch missing cards first
       setLoadingMissingCards(true);
-      await fetchWithConcurrency(
-        missingIdsResult,
-        (id) => getCard(setId, id),
-        (card, id) => {
-          if (missingAbortRef.current) return;
-          setMissingCards(prev => ({ ...prev, [id]: card }));
-        }
-      );
-      setLoadingMissingCards(false);
-
-      // Then fetch owned cards
-      if (ownedAbortRef.current) return;
       setLoadingOwnedCards(true);
-      await fetchWithConcurrency(
-        ownedIdsResult.map(i => i.id),
-        (id) => getCard(setId, id),
-        (card, id) => {
-          if (ownedAbortRef.current) return;
-          setOwnedCards(prev => ({ ...prev, [id]: card }));
+
+      // Populate missing cards from DB batch
+      const missingCardsResult = {};
+      const missingNotInDB = [];
+      for (const id of missingIdsResult) {
+        if (allCards[id]) {
+          missingCardsResult[id] = allCards[id];
+        } else {
+          missingNotInDB.push(id);
         }
-      );
+      }
+      setMissingCards(missingCardsResult);
+
+      // Populate owned cards from DB batch
+      const ownedCardsResult = {};
+      const ownedNotInDB = [];
+      for (const { id } of ownedIdsResult) {
+        if (allCards[id]) {
+          ownedCardsResult[id] = allCards[id];
+        } else {
+          ownedNotInDB.push(id);
+        }
+      }
+      setOwnedCards(ownedCardsResult);
+
+      // Only fetch from Scryfall cards not in DB
+      const notInDB = [...new Set([...missingNotInDB, ...ownedNotInDB])];
+      console.log(`DB hit: ${Object.keys(allCards).length} cards, Scryfall fallback: ${notInDB.length} cards`);
+
+      if (notInDB.length > 0) {
+        await fetchWithConcurrency(
+          notInDB,
+          (id) => getCard(setId, id),
+          (card, id) => {
+            if (missingAbortRef.current && ownedAbortRef.current) return;
+            if (missingIdsResult.includes(id)) {
+              setMissingCards(prev => ({ ...prev, [id]: card }));
+            }
+            if (ownedIdsResult.find(i => i.id === id)) {
+              setOwnedCards(prev => ({ ...prev, [id]: card }));
+            }
+          }
+        );
+      }
+
+      setLoadingMissingCards(false);
       setLoadingOwnedCards(false);
     }
 

@@ -15,6 +15,11 @@ export async function getOwnedCardIds(setId) {
   return res.json();
 }
 
+export async function getAllCards(setId) {
+  const res = await fetch(`${BASE_URL}/cards/${setId}`);
+  return res.json();
+}
+
 export async function getCard(setId, number, retries = 3) {
   for (let i = 0; i < retries; i++) {
     const res = await fetch(`${BASE_URL}/card/${setId}/${number}`);
