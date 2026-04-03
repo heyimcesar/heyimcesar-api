@@ -164,8 +164,19 @@ router.get('/recent', async (req, res) => {
 
 router.get('/now-playing', async (req, res) => {
   try {
-    const data = await spotifyFetch('/me/player/currently-playing');
+    const token = await getAccessToken();
+    const response = await fetch('https://api.spotify.com/v1/me/player/currently-playing', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    // 204 = no content, nothing is playing
+    if (response.status === 204 || response.status === 202) {
+      return res.json({ is_playing: false });
+    }
+
+    const data = await response.json();
     if (!data || !data.item) return res.json({ is_playing: false });
+
     res.json({
       is_playing: data.is_playing,
       name: data.item.name,
