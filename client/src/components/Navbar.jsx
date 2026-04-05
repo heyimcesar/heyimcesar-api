@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useUnits } from '../context/UnitsContext';
 
 const PROJECTS = [
   {
@@ -32,6 +33,8 @@ const PROJECTS = [
 ];
 
 export default function Navbar() {
+  const { metric, toggle } = useUnits();
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-md border-b border-zinc-900">
       <div className="max-w-5xl mx-auto px-6 h-12 flex items-center justify-between">
@@ -44,24 +47,36 @@ export default function Navbar() {
           heyimcesar<span className="text-zinc-700">/</span>api
         </NavLink>
 
-        {/* Project links */}
-        <div className="flex items-center gap-1">
-          {PROJECTS.map(({ path, label, icon }) => (
-            <NavLink
-              key={path}
-              to={path}
-              className={({ isActive }) =>
-                `flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition ${
-                  isActive
-                    ? 'bg-zinc-800 text-white'
-                    : 'text-zinc-500 hover:text-white hover:bg-zinc-900'
-                }`
-              }
-            >
-              {icon}
-              {label}
-            </NavLink>
-          ))}
+        <div className="flex items-center gap-3">
+          {/* Units toggle */}
+          <button
+            onClick={toggle}
+            className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs font-mono transition hover:border-zinc-600"
+          >
+            <span className={metric ? 'text-zinc-600' : 'text-green-400'}>mi</span>
+            <span className="text-zinc-700">/</span>
+            <span className={metric ? 'text-green-400' : 'text-zinc-600'}>km</span>
+          </button>
+
+          {/* Project links */}
+          <div className="flex items-center gap-1">
+            {PROJECTS.map(({ path, label, icon }) => (
+              <NavLink
+                key={path}
+                to={path}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition ${
+                    isActive
+                      ? 'bg-zinc-800 text-white'
+                      : 'text-zinc-500 hover:text-white hover:bg-zinc-900'
+                  }`
+                }
+              >
+                {icon}
+                {label}
+              </NavLink>
+            ))}
+          </div>
         </div>
 
       </div>

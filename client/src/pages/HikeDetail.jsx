@@ -4,7 +4,17 @@ import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
+import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import { getActivity } from '../api/strava';
+import {
+  useUnits,
+  formatDistance,
+  formatElevation,
+  formatElevationValue,
+  distanceLabel,
+  elevationLabel,
+} from '../context/UnitsContext';
 
 const GREEN = '#4ade80';
 
@@ -14,6 +24,14 @@ const chartTooltipStyle = {
   labelStyle: { color: '#ffffff', fontWeight: 600 },
   cursor: { fill: 'rgba(255,255,255,0.03)' },
 };
+
+function FitBounds({ positions }) {
+  const map = useMap();
+  useEffect(() => {
+    if (positions.length > 0) map.fitBounds(positions, { padding: [24, 24] });
+  }, [map, positions]);
+  return null;
+}
 
 function StatCard({ label, value, sub }) {
   return (
@@ -38,6 +56,7 @@ function ChartCard({ title, children, hint }) {
 export default function HikeDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { metric } = useUnits();
   const [hike, setHike] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -67,19 +86,22 @@ export default function HikeDetail() {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
 
-  // Sample streams to ~200 points for chart performance
+  const positions = hike.streams.latlng ?? [];
   const { altitude, heartrate, distance } = hike.streams;
-  const totalPoints = distance.length;
-  const step = Math.max(1, Math.floor(totalPoints / 200));
+  const step = Math.max(1, Math.floor(distance.length / 200));
 
+  // Charts use raw meter values, convert at render time based on metric flag
   const elevationData = distance
     .filter((_, i) => i % step === 0)
     .map((d, idx) => {
       const i = idx * step;
-      return {
-        dist: parseFloat((d * 0.000621371).toFixed(2)),
-        elev: altitude[i] != null ? Math.round(altitude[i] * 3.28084) : null,
-      };
+      const distVal = metric
+        ? parseFloat((d / 1000).toFixed(2))
+        : parseFloat((d * 0.000621371).toFixed(2));
+      const elevVal = altitude[i] != null
+        ? formatElevationValue(metric, altitude[i])
+        : null;
+      return { dist: distVal, elev: elevVal };
     })
     .filter(d => d.elev != null);
 
@@ -88,16 +110,21 @@ export default function HikeDetail() {
         .filter((_, i) => i % step === 0)
         .map((d, idx) => {
           const i = idx * step;
-          return {
-            dist: parseFloat((d * 0.000621371).toFixed(2)),
-            hr: heartrate[i] ?? null,
-          };
+          const distVal = metric
+            ? parseFloat((d / 1000).toFixed(2))
+            : parseFloat((d * 0.000621371).toFixed(2));
+          return { dist: distVal, hr: heartrate[i] ?? null };
         })
         .filter(d => d.hr != null)
     : [];
 
-  const elevMin = Math.min(...elevationData.map(d => d.elev));
-  const elevMax = Math.max(...elevationData.map(d => d.elev));
+  const elevMin = elevationData.length > 0 ? Math.min(...elevationData.map(d => d.elev)) : 0;
+  const elevMax = elevationData.length > 0 ? Math.max(...elevationData.map(d => d.elev)) : 0;
+  const dLabel = distanceLabel(metric);
+  const eLabel = elevationLabel(metric);
+
+  const startPos = positions[0] ?? null;
+  const endPos = positions[positions.length - 1] ?? null;
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -123,10 +150,13 @@ export default function HikeDetail() {
 
         {/* Stats grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <StatCard label="Distance" value={`${hike.distance_miles} mi`} />
+          <StatCard
+            label="Distance"
+            value={formatDistance(metric, hike.distance_meters)}
+          />
           <StatCard
             label="Elevation Gain"
-            value={`${Number(hike.elevation_gain_feet).toLocaleString()} ft`}
+            value={formatElevation(metric, hike.elevation_gain_meters)}
           />
           <StatCard label="Moving Time" value={hike.moving_time_formatted} />
           <StatCard
@@ -145,16 +175,60 @@ export default function HikeDetail() {
         </div>
 
         {/* Elevation range strip */}
-        {hike.elevation_high_feet && hike.elevation_low_feet && (
+        {hike.elevation_high_meters != null && hike.elevation_low_meters != null && (
           <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 flex items-center justify-between">
             <div>
               <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-1">Elevation Low</p>
-              <p className="text-white font-semibold">{Number(hike.elevation_low_feet).toLocaleString()} ft</p>
+              <p className="text-white font-semibold">
+                {formatElevation(metric, hike.elevation_low_meters)}
+              </p>
             </div>
             <div className="flex-1 mx-6 h-px bg-gradient-to-r from-zinc-700 via-green-400 to-zinc-700" />
             <div className="text-right">
               <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-1">Elevation High</p>
-              <p className="text-white font-semibold">{Number(hike.elevation_high_feet).toLocaleString()} ft</p>
+              <p className="text-white font-semibold">
+                {formatElevation(metric, hike.elevation_high_meters)}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Route Map */}
+        {positions.length > 0 && (
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+            <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest p-5 pb-3">Route</p>
+            <div style={{ height: 360 }}>
+              <MapContainer
+                center={startPos}
+                zoom={13}
+                style={{ height: '100%', width: '100%', background: '#09090b' }}
+                zoomControl={true}
+                scrollWheelZoom={false}
+              >
+                <TileLayer
+                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                  attribution='&copy; <a href="https://carto.com/">CARTO</a>'
+                />
+                <Polyline
+                  positions={positions}
+                  pathOptions={{ color: GREEN, weight: 3, opacity: 0.9 }}
+                />
+                <FitBounds positions={positions} />
+              </MapContainer>
+            </div>
+            <div className="flex items-center gap-6 px-5 py-3 border-t border-zinc-800">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-green-400 flex-shrink-0" />
+                <span className="text-xs text-zinc-500">
+                  Start {startPos ? `${startPos[0].toFixed(4)}, ${startPos[1].toFixed(4)}` : ''}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-400 flex-shrink-0" />
+                <span className="text-xs text-zinc-500">
+                  End {endPos ? `${endPos[0].toFixed(4)}, ${endPos[1].toFixed(4)}` : ''}
+                </span>
+              </div>
             </div>
           </div>
         )}
@@ -163,7 +237,7 @@ export default function HikeDetail() {
         {elevationData.length > 0 && (
           <ChartCard
             title="Elevation Profile"
-            hint={`${elevMin.toLocaleString()} ft → ${elevMax.toLocaleString()} ft`}
+            hint={`${elevMin.toLocaleString()} ${eLabel} → ${elevMax.toLocaleString()} ${eLabel}`}
           >
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={elevationData} margin={{ left: 0, right: 8, top: 4, bottom: 4 }}>
@@ -179,21 +253,21 @@ export default function HikeDetail() {
                   tick={{ fill: '#52525b', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={v => `${v} mi`}
+                  tickFormatter={v => `${v} ${dLabel}`}
                   interval="preserveStartEnd"
                 />
                 <YAxis
                   tick={{ fill: '#52525b', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={v => `${v.toLocaleString()} ft`}
-                  width={72}
+                  tickFormatter={v => `${v.toLocaleString()} ${eLabel}`}
+                  width={80}
                   domain={['auto', 'auto']}
                 />
                 <Tooltip
                   {...chartTooltipStyle}
-                  formatter={v => [`${Number(v).toLocaleString()} ft`, 'Elevation']}
-                  labelFormatter={l => `${l} mi`}
+                  formatter={v => [`${Number(v).toLocaleString()} ${eLabel}`, 'Elevation']}
+                  labelFormatter={l => `${l} ${dLabel}`}
                 />
                 <Area
                   type="monotone"
@@ -220,7 +294,7 @@ export default function HikeDetail() {
                   tick={{ fill: '#52525b', fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={v => `${v} mi`}
+                  tickFormatter={v => `${v} ${dLabel}`}
                   interval="preserveStartEnd"
                 />
                 <YAxis
@@ -234,7 +308,7 @@ export default function HikeDetail() {
                 <Tooltip
                   {...chartTooltipStyle}
                   formatter={v => [`${v} bpm`, 'Heart Rate']}
-                  labelFormatter={l => `${l} mi`}
+                  labelFormatter={l => `${l} ${dLabel}`}
                 />
                 <Line
                   type="monotone"

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getActivities } from '../api/strava';
+import { useUnits, formatDistance, formatElevation } from '../context/UnitsContext';
 
 function StatPill({ label, value }) {
   return (
@@ -12,6 +13,8 @@ function StatPill({ label, value }) {
 }
 
 function HikeCard({ hike, onClick }) {
+  const { metric } = useUnits();
+
   const date = new Date(hike.date).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
   });
@@ -33,10 +36,19 @@ function HikeCard({ hike, onClick }) {
         </svg>
       </div>
       <div className="grid grid-cols-4 gap-4 pt-4 border-t border-zinc-800">
-        <StatPill label="Distance" value={`${hike.distance_miles} mi`} />
-        <StatPill label="Elevation" value={`${Number(hike.elevation_gain_feet).toLocaleString()} ft`} />
+        <StatPill
+          label="Distance"
+          value={formatDistance(metric, hike.distance_meters)}
+        />
+        <StatPill
+          label="Elevation"
+          value={formatElevation(metric, hike.elevation_gain_meters)}
+        />
         <StatPill label="Time" value={hike.moving_time_formatted} />
-        <StatPill label="Avg HR" value={hike.average_heartrate ? `${Math.round(hike.average_heartrate)} bpm` : '—'} />
+        <StatPill
+          label="Avg HR"
+          value={hike.average_heartrate ? `${Math.round(hike.average_heartrate)} bpm` : '—'}
+        />
       </div>
     </button>
   );
@@ -47,6 +59,7 @@ export default function Hikes() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
+  const { metric } = useUnits();
 
   useEffect(() => {
     getActivities()
@@ -55,9 +68,8 @@ export default function Hikes() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Summary totals
-  const totalMiles = hikes.reduce((sum, h) => sum + parseFloat(h.distance_miles), 0).toFixed(1);
-  const totalElevation = hikes.reduce((sum, h) => sum + Number(h.elevation_gain_feet), 0).toLocaleString();
+  const totalMeters = hikes.reduce((sum, h) => sum + (h.distance_meters ?? 0), 0);
+  const totalElevMeters = hikes.reduce((sum, h) => sum + (h.elevation_gain_meters ?? 0), 0);
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -100,12 +112,12 @@ export default function Hikes() {
                 <p className="text-2xl font-bold text-white">{hikes.length}</p>
               </div>
               <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
-                <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-1">Total Miles</p>
-                <p className="text-2xl font-bold text-white">{totalMiles}</p>
+                <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-1">Total Distance</p>
+                <p className="text-2xl font-bold text-white">{formatDistance(metric, totalMeters)}</p>
               </div>
               <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
                 <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-1">Total Elevation</p>
-                <p className="text-2xl font-bold text-white">{totalElevation} <span className="text-sm text-zinc-500">ft</span></p>
+                <p className="text-2xl font-bold text-white">{formatElevation(metric, totalElevMeters)}</p>
               </div>
             </div>
 
