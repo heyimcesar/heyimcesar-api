@@ -13,9 +13,12 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@googlemaps/polyline-codec": "^1.0.28",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "leaflet": "^1.9.4",
     "mysql2": "^3.20.0",
+    "react-leaflet": "^5.0.0",
     "recharts": "^3.8.1",
     "serve-static": "^2.2.1"
   },
