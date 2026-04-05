@@ -1,5 +1,5 @@
+import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { useUnits } from '../context/UnitsContext';
 
 const PROJECTS = [
   {
@@ -33,7 +33,7 @@ const PROJECTS = [
 ];
 
 export default function Navbar() {
-  const { metric, toggle } = useUnits();
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-md border-b border-zinc-900">
@@ -43,43 +43,65 @@ export default function Navbar() {
         <NavLink
           to="/"
           className="text-sm font-mono text-zinc-500 hover:text-white transition"
+          onClick={() => setMenuOpen(false)}
         >
           heyimcesar<span className="text-zinc-700">/</span>api
         </NavLink>
 
-        <div className="flex items-center gap-3">
-          {/* Units toggle */}
-          <button
-            onClick={toggle}
-            className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs font-mono transition hover:border-zinc-600"
-          >
-            <span className={metric ? 'text-zinc-600' : 'text-green-400'}>mi</span>
-            <span className="text-zinc-700">/</span>
-            <span className={metric ? 'text-green-400' : 'text-zinc-600'}>km</span>
-          </button>
-
-          {/* Project links */}
-          <div className="flex items-center gap-1">
-            {PROJECTS.map(({ path, label, icon }) => (
-              <NavLink
-                key={path}
-                to={path}
-                className={({ isActive }) =>
-                  `flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition ${
-                    isActive
-                      ? 'bg-zinc-800 text-white'
-                      : 'text-zinc-500 hover:text-white hover:bg-zinc-900'
-                  }`
-                }
-              >
-                {icon}
-                {label}
-              </NavLink>
-            ))}
-          </div>
+        {/* Desktop links */}
+        <div className="hidden sm:flex items-center gap-1">
+          {PROJECTS.map(({ path, label, icon }) => (
+            <NavLink
+              key={path}
+              to={path}
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition ${
+                  isActive
+                    ? 'bg-zinc-800 text-white'
+                    : 'text-zinc-500 hover:text-white hover:bg-zinc-900'
+                }`
+              }
+            >
+              {icon}
+              {label}
+            </NavLink>
+          ))}
         </div>
 
+        {/* Mobile hamburger */}
+        <button
+          className="sm:hidden flex flex-col gap-1.5 p-2 text-zinc-500 hover:text-white transition"
+          onClick={() => setMenuOpen(o => !o)}
+          aria-label="Toggle menu"
+        >
+          <span className={`block w-5 h-px bg-current transition-all duration-200 origin-center ${menuOpen ? 'rotate-45 translate-y-2' : ''}`} />
+          <span className={`block w-5 h-px bg-current transition-all duration-200 ${menuOpen ? 'opacity-0' : ''}`} />
+          <span className={`block w-5 h-px bg-current transition-all duration-200 origin-center ${menuOpen ? '-rotate-45 -translate-y-2' : ''}`} />
+        </button>
       </div>
+
+      {/* Mobile menu */}
+      {menuOpen && (
+        <div className="sm:hidden border-t border-zinc-900 bg-black/95 px-4 py-3 flex flex-col gap-1">
+          {PROJECTS.map(({ path, label, icon }) => (
+            <NavLink
+              key={path}
+              to={path}
+              onClick={() => setMenuOpen(false)}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${
+                  isActive
+                    ? 'bg-zinc-800 text-white'
+                    : 'text-zinc-500 hover:text-white hover:bg-zinc-900'
+                }`
+              }
+            >
+              {icon}
+              {label}
+            </NavLink>
+          ))}
+        </div>
+      )}
     </nav>
   );
 }

@@ -3,6 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { getActivities } from '../api/strava';
 import { useUnits, formatDistance, formatElevation } from '../context/UnitsContext';
 
+function UnitToggle() {
+  const { metric, toggle } = useUnits();
+  return (
+    <button
+      onClick={toggle}
+      className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-lg px-2.5 py-1 text-xs font-mono transition hover:border-zinc-600"
+    >
+      <span className={metric ? 'text-zinc-600' : 'text-green-400'}>mi</span>
+      <span className="text-zinc-700">/</span>
+      <span className={metric ? 'text-green-400' : 'text-zinc-600'}>km</span>
+    </button>
+  );
+}
+
 function StatPill({ label, value }) {
   return (
     <div className="flex flex-col">
@@ -14,7 +28,6 @@ function StatPill({ label, value }) {
 
 function HikeCard({ hike, onClick }) {
   const { metric } = useUnits();
-
   const date = new Date(hike.date).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
   });
@@ -36,14 +49,8 @@ function HikeCard({ hike, onClick }) {
         </svg>
       </div>
       <div className="grid grid-cols-4 gap-4 pt-4 border-t border-zinc-800">
-        <StatPill
-          label="Distance"
-          value={formatDistance(metric, hike.distance_meters)}
-        />
-        <StatPill
-          label="Elevation"
-          value={formatElevation(metric, hike.elevation_gain_meters)}
-        />
+        <StatPill label="Distance" value={formatDistance(metric, hike.distance_meters)} />
+        <StatPill label="Elevation" value={formatElevation(metric, hike.elevation_gain_meters)} />
         <StatPill label="Time" value={hike.moving_time_formatted} />
         <StatPill
           label="Avg HR"
@@ -78,10 +85,13 @@ export default function Hikes() {
           <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-1">project / hikes</p>
           <h1 className="text-2xl font-bold tracking-tight">My Hikes</h1>
         </div>
-        <svg className="w-7 h-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-            d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" />
-        </svg>
+        <div className="flex items-center gap-3">
+          <UnitToggle />
+          <svg className="w-7 h-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+              d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" />
+          </svg>
+        </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-6 py-8">
@@ -105,7 +115,6 @@ export default function Hikes() {
 
         {!loading && !error && hikes.length > 0 && (
           <>
-            {/* Summary bar */}
             <div className="grid grid-cols-3 gap-4 mb-8">
               <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4">
                 <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-1">Total Hikes</p>
