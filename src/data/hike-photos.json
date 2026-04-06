@@ -1,0 +1,18 @@
+[
+    {
+      "hikeId": "16337780685",
+      "url": "https://photos.smugmug.com/Snowboard-February-2026/i-zZmCcNz/0/MMV7WD3nFZZCvRfX3WhtfdV4hNvvdxV3hKkJ2L9sV/XL/CGP07486-XL.jpg",
+      "caption": "Summit view",
+      "lat": 47.8023,
+      "lng": -121.0771,
+      "takenAt": "2025-10-04T10:32:00"
+    },
+    {
+        "hikeId": "16337780685",
+        "url": "https://photos.smugmug.com/Snowboard-February-2026/i-nqh6Vgd/0/MZd2kSLShBBW8q8DdqVtq9rJ7rRJst4H3dCRQ9zdZ/4K/CGP07514-4K.jpg",
+        "caption": "Summit view",
+        "lat": 47.8023,
+        "lng": -120.0771,
+        "takenAt": "2025-10-04T10:32:00"
+      }
+  ]

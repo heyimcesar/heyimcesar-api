@@ -1,4 +1,7 @@
 import { Router } from 'express';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import {
   getActivities,
   getActivity,
@@ -8,6 +11,7 @@ import {
 } from '../services/strava.js';
 
 const router = Router();
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 router.get('/', (req, res) => res.json({ service: 'strava', status: 'ok' }));
 
@@ -22,10 +26,8 @@ router.get('/activities', async (req, res) => {
         id: a.id,
         name: a.name,
         date: a.start_date_local,
-        // Raw meter values for unit conversion on the frontend
         distance_meters: a.distance,
         elevation_gain_meters: a.total_elevation_gain,
-        // Pre-formatted imperial as fallback
         distance_miles: (a.distance * 0.000621371).toFixed(2),
         elevation_gain_feet: (a.total_elevation_gain * 3.28084).toFixed(0),
         moving_time_formatted: formatDuration(a.moving_time),
@@ -56,12 +58,10 @@ router.get('/activity/:id', async (req, res) => {
       name: detail.name,
       date: detail.start_date_local,
       description: detail.description || null,
-      // Raw meter values for unit conversion on the frontend
       distance_meters: detail.distance,
       elevation_gain_meters: detail.total_elevation_gain,
       elevation_high_meters: detail.elev_high ?? null,
       elevation_low_meters: detail.elev_low ?? null,
-      // Pre-formatted imperial as fallback
       distance_miles: (detail.distance * 0.000621371).toFixed(2),
       elevation_gain_feet: (detail.total_elevation_gain * 3.28084).toFixed(0),
       elevation_high_feet: detail.elev_high ? (detail.elev_high * 3.28084).toFixed(0) : null,
@@ -90,6 +90,18 @@ router.get('/activity/:id', async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching activity:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/activity/:id/photos-geo', (req, res) => {
+  try {
+    const raw = readFileSync(join(__dirname, '../data/hike-photos.json'), 'utf-8');
+    const all = JSON.parse(raw);
+    const photos = all.filter(p => String(p.hikeId) === String(req.params.id));
+    res.json({ photos });
+  } catch (err) {
+    console.error('Error reading hike photos:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

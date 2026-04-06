@@ -3,3 +3,13 @@
 .leaflet-default-icon-path {
     background-image: url(https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png);
   }
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  
+  .leaflet-popup-content {
+    margin: 0 !important;
+  }

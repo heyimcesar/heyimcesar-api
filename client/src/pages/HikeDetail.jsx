@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
-import { MapContainer, TileLayer, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, useMap, useMapEvents, CircleMarker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
-import { getActivity } from '../api/strava';
+import { getActivity, getHikePhotosGeo } from '../api/strava';
 import {
   useUnits,
   formatDistance,
@@ -25,22 +25,57 @@ const chartTooltipStyle = {
   cursor: { fill: 'rgba(255,255,255,0.03)' },
 };
 
+// Returns distance in meters between two [lat, lng] points
+function haversine([lat1, lng1], [lat2, lng2]) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Finds nearest trail point index for a given lat/lng
+function nearestTrailIndex(positions, lat, lng) {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < positions.length; i++) {
+    const d = haversine(positions[i], [lat, lng]);
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return best;
+}
+
+// Sort photos by trail position
+function sortPhotosByTrail(photos, positions) {
+  if (!positions.length) return photos;
+  return [...photos]
+    .map(p => ({ ...p, _trailIdx: nearestTrailIndex(positions, p.lat, p.lng) }))
+    .sort((a, b) => a._trailIdx - b._trailIdx);
+}
+
 function FitBounds({ positions }) {
   const map = useMap();
   useEffect(() => {
     if (positions.length > 0) {
-      try {
-        map.fitBounds(positions, { padding: [24, 24] });
-      } catch (_) {}
+      try { map.fitBounds(positions, { padding: [24, 24] }); } catch (_) {}
     }
   }, [map, positions]);
   return null;
 }
 
-function RouteMap({ positions, hikeId }) {
+// Exposes the map instance via a ref
+function MapRef({ mapRef }) {
+  const map = useMap();
+  useEffect(() => { mapRef.current = map; }, [map, mapRef]);
+  return null;
+}
+
+function RouteMap({ positions, hikeId, geoPhotos, activePhotoIdx, markerRefs, mapRef }) {
   const startPos = positions[0] ?? null;
   const endPos = positions[positions.length - 1] ?? null;
-
   if (!startPos) return null;
 
   return (
@@ -55,6 +90,7 @@ function RouteMap({ positions, hikeId }) {
           zoomControl={true}
           scrollWheelZoom={false}
         >
+          <MapRef mapRef={mapRef} />
           <TileLayer
             url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
             attribution='&copy; <a href="https://carto.com/">CARTO</a>'
@@ -63,9 +99,53 @@ function RouteMap({ positions, hikeId }) {
             positions={positions}
             pathOptions={{ color: GREEN, weight: 3, opacity: 0.9 }}
           />
+
+          {geoPhotos.map((photo, i) => (
+            <CircleMarker
+              key={i}
+              center={[photo.lat, photo.lng]}
+              radius={activePhotoIdx === i ? 11 : 8}
+              pathOptions={{
+                color: activePhotoIdx === i ? '#ffffff' : '#ffffff',
+                fillColor: activePhotoIdx === i ? '#facc15' : GREEN,
+                fillOpacity: 1,
+                weight: 2,
+              }}
+              ref={el => { markerRefs.current[i] = el; }}
+            >
+              <Popup className="hike-photo-popup">
+                <div style={{
+                  background: '#18181b',
+                  borderRadius: 12,
+                  overflow: 'hidden',
+                  width: 200,
+                  border: '1px solid #3f3f46',
+                }}>
+                  <img
+                    src={photo.url}
+                    alt={photo.caption || `Photo ${i + 1}`}
+                    style={{ width: '100%', display: 'block', aspectRatio: '16/9', objectFit: 'cover' }}
+                  />
+                  {photo.caption && (
+                    <p style={{ margin: 0, padding: '8px 10px', fontSize: 12, color: '#a1a1aa', fontFamily: 'monospace' }}>
+                      {photo.caption}
+                    </p>
+                  )}
+                  {photo.takenAt && (
+                    <p style={{ margin: 0, padding: '0 10px 8px', fontSize: 11, color: '#52525b', fontFamily: 'monospace' }}>
+                      {new Date(photo.takenAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+                    </p>
+                  )}
+                </div>
+              </Popup>
+            </CircleMarker>
+          ))}
+
           <FitBounds positions={positions} />
         </MapContainer>
       </div>
+
+      {/* Legend */}
       <div className="flex items-center gap-6 px-5 py-3 border-t border-zinc-800">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-green-400 flex-shrink-0" />
@@ -79,7 +159,56 @@ function RouteMap({ positions, hikeId }) {
             End {endPos ? `${endPos[0].toFixed(4)}, ${endPos[1].toFixed(4)}` : ''}
           </span>
         </div>
+        {geoPhotos.length > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-white border-2 border-green-400 flex-shrink-0" />
+            <span className="text-xs text-zinc-500">{geoPhotos.length} photo{geoPhotos.length !== 1 ? 's' : ''}</span>
+          </div>
+        )}
       </div>
+
+      {/* Photo filmstrip */}
+      {geoPhotos.length > 0 && (
+        <div className="border-t border-zinc-800 px-4 py-3">
+          <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-3">
+            Photos along the trail
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'thin', scrollbarColor: '#3f3f46 transparent' }}>
+            {geoPhotos.map((photo, i) => (
+              <button
+                key={i}
+                onClick={() => {
+                  const marker = markerRefs.current[i];
+                  const map = mapRef.current;
+                  if (map && marker) {
+                    map.flyTo([photo.lat, photo.lng], 15, { duration: 0.8 });
+                    setTimeout(() => {
+                      try { marker.openPopup(); } catch (_) {}
+                    }, 900);
+                  }
+                }}
+                className={`flex-shrink-0 relative rounded-xl overflow-hidden border-2 transition ${
+                  activePhotoIdx === i
+                    ? 'border-yellow-400'
+                    : 'border-zinc-700 hover:border-green-400'
+                }`}
+                style={{ width: 96, height: 64 }}
+                title={photo.caption || `Photo ${i + 1}`}
+              >
+                <img
+                  src={photo.url}
+                  alt={photo.caption || `Photo ${i + 1}`}
+                  className="w-full h-full object-cover"
+                />
+                {/* Trail order badge */}
+                <span className="absolute top-1 left-1 bg-black/70 text-white text-xs font-mono rounded px-1">
+                  {i + 1}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -175,15 +304,29 @@ export default function HikeDetail() {
   const navigate = useNavigate();
   const { metric } = useUnits();
   const [hike, setHike] = useState(null);
+  const [geoPhotos, setGeoPhotos] = useState([]);
+  const [activePhotoIdx, setActivePhotoIdx] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const markerRefs = useRef([]);
+  const mapRef = useRef(null);
 
   useEffect(() => {
     setHike(null);
+    setGeoPhotos([]);
+    setActivePhotoIdx(null);
     setLoading(true);
     setError(null);
-    getActivity(id)
-      .then(setHike)
+    markerRefs.current = [];
+
+    Promise.all([getActivity(id), getHikePhotosGeo(id)])
+      .then(([hikeData, photoData]) => {
+        setHike(hikeData);
+        const positions = hikeData.streams?.latlng ?? [];
+        const sorted = sortPhotosByTrail(photoData.photos ?? [], positions);
+        setGeoPhotos(sorted);
+        markerRefs.current = new Array(sorted.length).fill(null);
+      })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
@@ -211,9 +354,7 @@ export default function HikeDetail() {
       const distVal = metric
         ? parseFloat((d / 1000).toFixed(2))
         : parseFloat((d * 0.000621371).toFixed(2));
-      const elevVal = altitude[i] != null
-        ? formatElevationValue(metric, altitude[i])
-        : null;
+      const elevVal = altitude[i] != null ? formatElevationValue(metric, altitude[i]) : null;
       return { dist: distVal, elev: elevVal };
     })
     .filter(d => d.elev != null);
@@ -238,7 +379,6 @@ export default function HikeDetail() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
       <div className="border-b border-zinc-900 px-6 py-5">
         <div className="flex items-center justify-between mb-4">
           <button
@@ -261,7 +401,6 @@ export default function HikeDetail() {
 
       <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
 
-        {/* Stats grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
           <StatCard label="Distance" value={formatDistance(metric, hike.distance_meters)} />
           <StatCard label="Elevation Gain" value={formatElevation(metric, hike.elevation_gain_meters)} />
@@ -281,7 +420,6 @@ export default function HikeDetail() {
           />
         </div>
 
-        {/* Elevation range strip */}
         {hike.elevation_high_meters != null && hike.elevation_low_meters != null && (
           <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 flex items-center justify-between">
             <div>
@@ -296,12 +434,17 @@ export default function HikeDetail() {
           </div>
         )}
 
-        {/* Route Map */}
         {positions.length > 0 && (
-          <RouteMap positions={positions} hikeId={id} />
+          <RouteMap
+            positions={positions}
+            hikeId={id}
+            geoPhotos={geoPhotos}
+            activePhotoIdx={activePhotoIdx}
+            markerRefs={markerRefs}
+            mapRef={mapRef}
+          />
         )}
 
-        {/* Elevation chart */}
         {elevationData.length > 0 && (
           <ChartCard
             title="Elevation Profile"
@@ -351,7 +494,6 @@ export default function HikeDetail() {
           </ChartCard>
         )}
 
-        {/* Heart rate chart */}
         {hrData.length > 0 && (
           <ChartCard title="Heart Rate">
             <ResponsiveContainer width="100%" height={200}>
@@ -391,7 +533,6 @@ export default function HikeDetail() {
           </ChartCard>
         )}
 
-        {/* Photos */}
         {hike.photos && hike.photos.length > 0 && (
           <div>
             <p className="text-xs font-mono text-zinc-600 uppercase tracking-widest mb-4">Photos</p>
@@ -408,7 +549,6 @@ export default function HikeDetail() {
           </div>
         )}
 
-        {/* Strava link */}
         <div className="pt-2">
           <a
             href={`https://www.strava.com/activities/${hike.id}`}
