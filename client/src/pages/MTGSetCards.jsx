@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getMissingCardIds, getOwnedCardIds, getCard, getSetInfo, getAllCards } from '../api/mtgSets';
+import { getMissingCardIds, getOwnedCardIds, getCard, getSetInfo, getAllCards, refreshSet } from '../api/mtgSets';
 
 const CONCURRENCY = 1;
 
@@ -226,6 +226,8 @@ export default function MTGSetCards() {
 
   const [setInfo, setSetInfo] = useState(null);
   const [search, setSearch] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshResult, setRefreshResult] = useState(null);
   const missingAbortRef = useRef(false);
   const ownedAbortRef = useRef(false);
 
@@ -314,6 +316,31 @@ export default function MTGSetCards() {
       ownedAbortRef.current = true;
     };
   }, [setId]);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    setRefreshResult(null);
+    try {
+      const result = await refreshSet(setId);
+      setRefreshResult(result);
+      // Reload card data from DB after refresh
+      const allCards = await getAllCards(setId);
+      setMissingCards(prev => {
+        const next = { ...prev };
+        for (const id of missingIds) if (allCards[id]) next[id] = allCards[id];
+        return next;
+      });
+      setOwnedCards(prev => {
+        const next = { ...prev };
+        for (const { id } of ownedIds) if (allCards[id]) next[id] = allCards[id];
+        return next;
+      });
+    } catch (err) {
+      setRefreshResult({ error: err.message });
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   const isMissing = view === 'missing';
   const activeIds = isMissing ? missingIds : ownedIds.map(i => i.id);
@@ -412,7 +439,7 @@ export default function MTGSetCards() {
       <div className="px-8 py-8 max-w-screen-xl mx-auto">
 
         {/* Toggle */}
-        <div className="flex items-center gap-2 mb-6">
+        <div className="flex items-center gap-4 mb-6 flex-wrap">
           <div className="flex bg-zinc-800 rounded-lg p-1">
             <button
               onClick={() => { setView('missing'); setSearch(''); }}
@@ -435,6 +462,24 @@ export default function MTGSetCards() {
               Have {!loadingOwnedIds && `(${ownedIds.length})`}
             </button>
           </div>
+
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {refreshing ? 'Refreshing...' : 'Refresh from Scryfall'}
+          </button>
+
+          {refreshResult && !refreshResult.error && (
+            <span className="text-sm text-zinc-400">
+              Updated {refreshResult.updated} / {refreshResult.total} cards
+              {refreshResult.failed > 0 && ` (${refreshResult.failed} failed)`}
+            </span>
+          )}
+          {refreshResult?.error && (
+            <span className="text-sm text-red-400">{refreshResult.error}</span>
+          )}
         </div>
 
         {loadingIds && (

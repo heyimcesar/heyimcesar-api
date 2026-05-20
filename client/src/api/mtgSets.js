@@ -37,3 +37,8 @@ export async function getSetInfo(setId) {
   const res = await fetch(`${BASE_URL}/set-info/${setId}`);
   return res.json();
 }
+
+export async function refreshSet(setId) {
+  const res = await fetch(`${BASE_URL}/refresh-set/${setId}`, { method: 'POST' });
+  return res.json();
+}

@@ -157,4 +157,64 @@ router.get('/set-info/:setId', async (req, res) => {
   res.json(data);
 });
 
+router.post('/refresh-set/:set', async (req, res) => {
+  try {
+    const { set } = req.params;
+    const [missingIds, ownedIds] = await Promise.all([
+      getMissingCardIds(set),
+      getOwnedCardIds(set),
+    ]);
+
+    const allIds = [...new Set([...missingIds, ...ownedIds.map(i => i.id)])];
+    let updated = 0;
+    let failed = 0;
+
+    for (const number of allIds) {
+      const card = await getCardFromScryfall(set, number);
+
+      if (card.object === 'error') {
+        failed++;
+        await new Promise(r => setTimeout(r, 100));
+        continue;
+      }
+
+      const imageUri = card.card_faces
+        ? card.card_faces[0].image_uris?.normal
+        : card.image_uris?.normal;
+      const backImageUri = card.card_faces
+        ? card.card_faces[1]?.image_uris?.normal
+        : null;
+
+      await pool.execute(`
+        INSERT INTO mtg_cards (set_id, number, name, tcgplayer_id, price, price_foil, image_uri, back_image_uri)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          name = VALUES(name),
+          tcgplayer_id = VALUES(tcgplayer_id),
+          price = VALUES(price),
+          price_foil = VALUES(price_foil),
+          image_uri = VALUES(image_uri),
+          back_image_uri = VALUES(back_image_uri),
+          updated_at = CURRENT_TIMESTAMP
+      `, [
+        set, number,
+        card.name ?? null,
+        card.tcgplayer_id ?? null,
+        card.prices?.usd ?? null,
+        card.prices?.usd_foil ?? null,
+        imageUri ?? null,
+        backImageUri ?? null,
+      ]);
+
+      updated++;
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    res.json({ updated, failed, total: allIds.length });
+  } catch (err) {
+    console.error('Error refreshing set:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
