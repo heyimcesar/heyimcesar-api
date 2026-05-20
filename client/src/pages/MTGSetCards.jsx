@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getMissingCardIds, getOwnedCardIds, getCard, getSetInfo, getAllCards, refreshSet } from '../api/mtgSets';
+import { getMissingCardIds, getOwnedCardIds, getCard, getSetInfo, getAllCards } from '../api/mtgSets';
 
 const CONCURRENCY = 1;
 
@@ -320,26 +320,29 @@ export default function MTGSetCards() {
   async function handleRefresh() {
     setRefreshing(true);
     setRefreshResult(null);
-    try {
-      const result = await refreshSet(setId);
-      setRefreshResult(result);
-      // Reload card data from DB after refresh
-      const allCards = await getAllCards(setId);
-      setMissingCards(prev => {
-        const next = { ...prev };
-        for (const id of missingIds) if (allCards[id]) next[id] = allCards[id];
-        return next;
-      });
-      setOwnedCards(prev => {
-        const next = { ...prev };
-        for (const { id } of ownedIds) if (allCards[id]) next[id] = allCards[id];
-        return next;
-      });
-    } catch (err) {
-      setRefreshResult({ error: err.message });
-    } finally {
-      setRefreshing(false);
-    }
+    setMissingCards({});
+    setOwnedCards({});
+    setLoadingMissingCards(true);
+    setLoadingOwnedCards(true);
+
+    const allIds = [...new Set([...missingIds, ...ownedIds.map(i => i.id)])];
+
+    await fetchWithConcurrency(
+      allIds,
+      (id) => getCard(setId, id, 3, true),
+      (card, id) => {
+        if (missingIds.includes(id)) {
+          setMissingCards(prev => ({ ...prev, [id]: card }));
+        }
+        if (ownedIds.find(i => i.id === id)) {
+          setOwnedCards(prev => ({ ...prev, [id]: card }));
+        }
+      }
+    );
+
+    setLoadingMissingCards(false);
+    setLoadingOwnedCards(false);
+    setRefreshing(false);
   }
 
   const isMissing = view === 'missing';

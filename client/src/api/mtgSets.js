@@ -20,9 +20,10 @@ export async function getAllCards(setId) {
   return res.json();
 }
 
-export async function getCard(setId, number, retries = 3) {
+export async function getCard(setId, number, retries = 3, force = false) {
+  const url = `${BASE_URL}/card/${setId}/${number}${force ? '?force=true' : ''}`;
   for (let i = 0; i < retries; i++) {
-    const res = await fetch(`${BASE_URL}/card/${setId}/${number}`);
+    const res = await fetch(url);
     if (res.status === 429) {
       await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
       continue;

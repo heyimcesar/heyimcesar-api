@@ -62,9 +62,10 @@ router.get('/cards/:set', async (req, res) => {
 
 router.get('/card/:set/:number', async (req, res) => {
   const { set, number } = req.params;
+  const force = req.query.force === 'true';
 
-  // Try DB first
-  try {
+  // Try DB first (skip if force refresh)
+  if (!force) try {
     const [rows] = await pool.execute(
       'SELECT * FROM mtg_cards WHERE set_id = ? AND number = ?',
       [set, number]
