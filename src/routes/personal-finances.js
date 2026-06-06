@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import {
-  setupTable,
+  setupTable, seedData,
   getCategories, upsertCategory,
   getExchangeRates, upsertExchangeRate,
   getAccounts, upsertAccount,
@@ -26,6 +26,17 @@ router.post('/setup', requireApiKey, async (req, res) => {
     res.json({ status: 'ok', message: 'All tables created' });
   } catch (err) {
     console.error('personal-finances setup error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /personal-finances/seed — insert all historical data (run once)
+router.post('/seed', requireApiKey, async (req, res) => {
+  try {
+    const result = await seedData();
+    res.json({ status: 'ok', ...result });
+  } catch (err) {
+    console.error('personal-finances seed error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
