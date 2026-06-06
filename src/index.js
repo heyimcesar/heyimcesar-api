@@ -4,6 +4,7 @@ import ouraRouter from './routes/oura.js';
 import mtgSetsRouter from './routes/mtg_sets.js';
 import spotifyRouter from './routes/spotify.js';
 import stravaRouter from './routes/strava.js';
+import personalFinancesRouter from './routes/personal-finances.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import serveStatic from 'serve-static';
@@ -19,6 +20,7 @@ app.use('/oura', ouraRouter);
 app.use('/mtg-sets', mtgSetsRouter);
 app.use('/spotify', spotifyRouter);
 app.use('/strava', stravaRouter);
+app.use('/personal-finances', personalFinancesRouter);
 
 // Static files
 app.use(serveStatic(join(__dirname, '../client/dist')));
