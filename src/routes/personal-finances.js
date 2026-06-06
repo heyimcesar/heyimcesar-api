@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import {
-  setupTable, seedData,
   getCategories, upsertCategory,
   getExchangeRates, upsertExchangeRate,
   getAccounts, upsertAccount,
@@ -8,6 +7,15 @@ import {
 } from '../services/personal-finances.js';
 
 const router = Router();
+
+// ── CORS ──────────────────────────────────────────────────────────────────────
+router.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 function requireApiKey(req, res, next) {
@@ -17,29 +25,6 @@ function requireApiKey(req, res, next) {
   }
   next();
 }
-
-// ── Setup ─────────────────────────────────────────────────────────────────────
-// POST /personal-finances/setup — create all tables (run once)
-router.post('/setup', requireApiKey, async (req, res) => {
-  try {
-    await setupTable();
-    res.json({ status: 'ok', message: 'All tables created' });
-  } catch (err) {
-    console.error('personal-finances setup error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /personal-finances/seed — insert all historical data (run once)
-router.post('/seed', requireApiKey, async (req, res) => {
-  try {
-    const result = await seedData();
-    res.json({ status: 'ok', ...result });
-  } catch (err) {
-    console.error('personal-finances seed error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // ── Categories ────────────────────────────────────────────────────────────────
 // GET /personal-finances/categories

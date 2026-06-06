@@ -1,73 +1,5 @@
 import pool from './personal-finances-db.js';
 
-// ── Setup ─────────────────────────────────────────────────────────────────────
-export async function setupTable() {
-  // 1. categories (must exist before accounts FK)
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS categories (
-      id          VARCHAR(20) NOT NULL PRIMARY KEY,
-      label       VARCHAR(50) NOT NULL,
-      is_liability TINYINT(1) NOT NULL DEFAULT 0,
-      created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-
-  // Seed default categories
-  await pool.query(`
-    INSERT IGNORE INTO categories (id, label, is_liability) VALUES
-      ('bank',        'Bank',        0),
-      ('investment',  'Investment',  0),
-      ('asset',       'Asset',       0),
-      ('credit_card', 'Credit Card', 1),
-      ('loan',        'Loan',        1)
-  `);
-
-  // 2. accounts
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS accounts (
-      id          VARCHAR(20)  NOT NULL PRIMARY KEY,
-      name        VARCHAR(100) NOT NULL,
-      institution VARCHAR(100) NOT NULL DEFAULT '',
-      category_id VARCHAR(20)  NOT NULL,
-      currency    VARCHAR(10)  NOT NULL,
-      notes       TEXT,
-      active      TINYINT(1)   NOT NULL DEFAULT 1,
-      closed_at   DATE         DEFAULT NULL,
-      created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-
-  // 3. exchange_rates — one row per currency pair per date
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS exchange_rates (
-      id            INT AUTO_INCREMENT PRIMARY KEY,
-      date          DATE        NOT NULL,
-      from_currency VARCHAR(10) NOT NULL,
-      to_currency   VARCHAR(10) NOT NULL DEFAULT 'USD',
-      rate          DECIMAL(10,6) NOT NULL,
-      created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE KEY uq_rate (date, from_currency, to_currency)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-
-  // 4. account_history — lean, only balances + date
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS account_history (
-      id             INT AUTO_INCREMENT PRIMARY KEY,
-      date           DATE          NOT NULL,
-      account_id     VARCHAR(20)   NOT NULL,
-      balance_native DECIMAL(15,4) NOT NULL,
-      balance_usd    DECIMAL(15,4) NOT NULL,
-      notes          TEXT,
-      created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE KEY uq_date_account (date, account_id),
-      INDEX idx_date (date),
-      INDEX idx_account_id (account_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-}
-
 // ── Categories ────────────────────────────────────────────────────────────────
 export async function getCategories() {
   const [rows] = await pool.query(
@@ -210,8 +142,8 @@ export async function insertRows(rows) {
   }
 }
 
-// ── Seed ──────────────────────────────────────────────────────────────────────
-export async function seedData() {
+// ── Seed (removed — run once via script, not exposed as endpoint) ─────────────
+async function seedData() {
   const accounts = [
     { id: 'acct_001', name: 'HSA Indeed',                  institution: 'Optum',                   category_id: 'bank',        currency: 'USD', notes: '' },
     { id: 'acct_002', name: 'Checkings Account',            institution: 'First Tech Credit Union', category_id: 'bank',        currency: 'USD', notes: '' },
