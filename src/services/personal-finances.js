@@ -34,8 +34,7 @@ export async function setupTable() {
       active      TINYINT(1)   NOT NULL DEFAULT 1,
       closed_at   DATE         DEFAULT NULL,
       created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      FOREIGN KEY (category_id) REFERENCES categories(id)
+      updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
@@ -64,8 +63,7 @@ export async function setupTable() {
       created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       UNIQUE KEY uq_date_account (date, account_id),
       INDEX idx_date (date),
-      INDEX idx_account_id (account_id),
-      FOREIGN KEY (account_id) REFERENCES accounts(id)
+      INDEX idx_account_id (account_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 }
